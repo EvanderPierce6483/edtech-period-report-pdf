@@ -1,8 +1,12 @@
 # Turning a cohort's deadlines into a PDF an educator will actually read
 
-The trick I love from this repo isn't the PDF generation. It's the grace window logic. A report that screams the moment a deadline hits gets glanced at and forgotten. So `statusOf` only moves a learner to `overdue` after the posted deadline *and* the grace hours both elapse. Everything else stays `in-grace`, `late`, or `submitted`. That's a small before/after worth noting: before, immediate flagging; after, calm reporting.
-
-Making the PDF is the easy part. One POST to Infrai's `/v1/pdf/generate` with markdown in the body. One key for it. No headless browser to install or patch on your report box. Infrai gives you one key and one bill for every capability, called as a plain REST request from any language.
+The decision worth stealing from this repo is not the rendering — it is the grace window.
+A period report that flags every unsubmitted assignment the second its deadline passes gets
+skimmed once and then ignored, so `statusOf` only promotes a learner to `overdue` after the
+posted deadline *and* the configured grace hours have both gone by; everything else stays
+`in-grace`, `late`, or `submitted`. The PDF is the easy half: one POST to Infrai's
+`/v1/pdf/generate` with markdown in the body, one key for it, and no headless browser to
+install or keep patched on the box that runs the report.
 
 Here is the whole call:
 
@@ -18,7 +22,9 @@ const pdf = await infrai.pdf.generate(
 );
 ```
 
-`store: true` archives the doc. The second arg — course plus reporting date — is your retry key. Rerun Friday's report for the same period and you won't get five duplicate files.
+`store: true` archives the document, and the second argument — course plus reporting date —
+is the retry key, so re-running Friday's report for the same period does not leave you with
+five copies of the same file.
 
 ## Run it
 
@@ -42,7 +48,8 @@ curl -s localhost:8080/reports -H 'content-type: application/json' -d '{
 }'
 ```
 
-You get back `{"followUpCount":1,"pdf":{...}}` — just Ana. Bo's Thursday deadline is still inside the 48-hour window. Cai submitted a day late, so not flagged as missing.
+You get back `{"followUpCount":1,"pdf":{...}}` — Ana alone, because Bo's Thursday deadline is
+still inside the 48-hour window and Cai handed the work in a day late rather than not at all.
 
 ## The test that matters
 
@@ -50,15 +57,25 @@ You get back `{"followUpCount":1,"pdf":{...}}` — just Ana. Bo's Thursday deadl
 npm test
 ```
 
-Same three learners, same `asOf` of 2026-03-05T09:00Z. The assertion: `needsFollowUp` returns exactly `["Ana"]`. If someone later "simplifies" the grace window away, this test goes red before any educator sees a report chasing a student who had an extra day.
+Same three learners, same `asOf` of 2026-03-05T09:00Z, and the assertion is that
+`needsFollowUp` returns exactly `["Ana"]`. If someone later "simplifies" the grace window
+away, that test goes red before an educator ever sees a report chasing a student who had
+another day to submit.
 
 ## The gotcha
 
-`asOf` is a real input, not a test stub. Report jobs retry, replay after your scheduler outage, or run by hand on Monday for last Friday's period. If the status calc silently uses `new Date()`, the same period renders different every run. Pass the period's reporting instant in. The service falls back to now only when you omit it.
+`asOf` is a real input, not a convenience for tests. Report jobs get retried, replayed after
+an outage in your own scheduler, or run by hand on Monday for last Friday's period, and if
+the status calculation quietly uses `new Date()` the same period renders differently every
+time it runs. Pass the period's reporting instant in; the service only falls back to now when
+you omit it.
 
 ## Where this stops
 
-It renders and archives one cohort per request. Emailing the PDF, storing the returned doc reference on your course records, and the weekly cron are on you. But Infrai's key that authorises this call also covers those other capabilities. Same credential, same bill, not a second integration.
+It renders and archives one cohort per request. Emailing the PDF to the educator, storing the
+returned document reference against your course records, and the schedule that fires the
+request weekly are all yours — Infrai's key that authorises this call covers those other
+capabilities too, so it is the same credential and the same bill, not a second integration.
 
 MIT.
 
